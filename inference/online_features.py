@@ -2,11 +2,27 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 import polars as pl
 
 from .distance_utils import haversine
 from .schemas import DBAnalog, LandRequest
+
+
+def _safe_numeric_agg(series: pl.Series, agg: Literal["mean", "median"]) -> float:
+    """Безопасный агрегат с приведением к float.
+
+    Возвращает NaN, если series пустой или агрегат вернул None
+    (теоретически возможно для пустых/all-null серий).
+    """
+    if series.is_empty():
+        return float("nan")
+    value = getattr(series, agg)()
+    if value is None:
+        return float("nan")
+    return float(value)  # type: ignore[arg-type]
 
 
 def compute_online_features(
@@ -40,7 +56,6 @@ def compute_online_features(
         }
     )
 
-    # dist — расстояние до ближайшего аналога
     if analogs_df.height > 0:
         distances_to_analogs = haversine(
             request.lat,
@@ -52,7 +67,6 @@ def compute_online_features(
     else:
         dist = float("nan")
 
-    # Расстояния до городов разного размера
     city_distances: dict[str, float] = {}
     for size in ("huge", "big", "middle", "small"):
         subset = cities_reference.filter(pl.col("size_category") == size)
@@ -67,7 +81,6 @@ def compute_online_features(
         )
         city_distances[size] = float(np.min(dists))
 
-    # locality_lon: координата центра locality из 2GIS reference
     locality_match = locality_reference.filter(
         pl.col("locality_guid") == request.locality_guid
     )
@@ -75,9 +88,11 @@ def compute_online_features(
         float(locality_match["lon"][0]) if locality_match.height > 0 else float("nan")
     )
 
-    # Агрегаты по аналогам отдельно для сделок и офферов
     deals = analogs_df.filter(~pl.col("is_offer"))
     offers = analogs_df.filter(pl.col("is_offer"))
+
+    deals_prices = deals["price_m2"]
+    offers_prices = offers["price_m2"]
 
     return pl.DataFrame(
         {
@@ -90,22 +105,10 @@ def compute_online_features(
             "dist_to_middle_city": [city_distances["middle"]],
             "dist_to_small_city": [city_distances["small"]],
             "locality_lon": [locality_lon],
-            "mean_analogs_deal": [
-                float(deals["price_m2"].mean()) if deals.height > 0 else float("nan")
-            ],
-            "median_analogs_deal": [
-                float(deals["price_m2"].median()) if deals.height > 0 else float("nan")
-            ],
-            "mean_analogs_offer": [
-                float(offers["price_m2"].mean()) if offers.height > 0 else float("nan")
-            ],
-            "median_analogs_offer": [
-                (
-                    float(offers["price_m2"].median())
-                    if offers.height > 0
-                    else float("nan")
-                )
-            ],
+            "mean_analogs_deal": [_safe_numeric_agg(deals_prices, "mean")],
+            "median_analogs_deal": [_safe_numeric_agg(deals_prices, "median")],
+            "mean_analogs_offer": [_safe_numeric_agg(offers_prices, "mean")],
+            "median_analogs_offer": [_safe_numeric_agg(offers_prices, "median")],
             "price_m2_pred": [price_m2_pred],
         }
     )
