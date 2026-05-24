@@ -82,7 +82,7 @@ class ConfidenceModel(BoostingModel):
 class KrigingCorrector:
     """Precomputed kriging grid с билинейной интерполяцией.
 
-    Артефакт — pickle со словарём:
+    Артефакт - pickle со словарём:
         {
             "lats": np.ndarray (1D, отсортированный),
             "lons": np.ndarray (1D, отсортированный),
@@ -91,7 +91,7 @@ class KrigingCorrector:
 
     Inference: O(1) на точку через RegularGridInterpolator.
     Объяснение: наивный кригинг на N точек обучения имеет O(N^3) на
-    обращении матрицы ковариаций — не помещается в latency бюджет.
+    обращении матрицы ковариаций - не помещается в latency бюджет.
     Предрасчитанная сетка позволяет свести inference к интерполяции
     между ближайшими узлами без потери качества (поверхность остатков
     гладкая по построению).

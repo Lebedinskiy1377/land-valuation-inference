@@ -24,16 +24,17 @@ class LandValuationPipeline:
 
     Загружает 4 LightGBM-бустинга и кригинг-корректор. На каждый запрос
     выполняет:
-        1. AnalogFilterModel — отсекает плохих аналогов.
-        2. AnalogCorrectionModel — ранжирует по эквивалентности цены.
-        3. compute_online_features — расстояния и агрегаты.
-        4. MainPriceModel — базовая цена за м^2.
-        5. KrigingCorrector — пространственная коррекция остатков.
-        6. ConfidenceModel — уверенность.
+        1. AnalogFilterModel - отсекает плохих аналогов.
+        2. AnalogCorrectionModel - ранжирует по эквивалентности цены.
+        3. compute_online_features - расстояния и агрегаты.
+        4. MainPriceModel - базовая цена за м^2.
+        5. KrigingCorrector - пространственная коррекция остатков.
+        6. ConfidenceModel - уверенность; на вход получает все признаки
+           MainPriceModel плюс её собственный предикт (price_m2_pred).
 
     Аналоги приходят извне как список DBAnalog (предварительно отобранные
     в hot-storage витрине по правилу подбора: радиус 3 км, отклонение
-    площади ±20%, возраст до 240 дней — см. слой выборки аналогов).
+    площади ±20%, возраст до 240 дней - см. слой выборки аналогов).
     """
 
     def __init__(
@@ -63,10 +64,9 @@ class LandValuationPipeline:
         self,
         request: LandRequest,
         analogs: list[DBAnalog],
-        price_m2_pred: float,
     ) -> ValuationResponse:
         if not analogs:
-            return self._empty_response(price_m2_pred)
+            return self._empty_response()
 
         # 1. Pairwise features
         pairwise = build_pairwise_features(request, analogs)
@@ -75,9 +75,11 @@ class LandValuationPipeline:
         bad_proba = self.analog_filter_model.predict(pairwise)
         keep_mask = bad_proba < self.filter_threshold
         if not keep_mask.any():
-            return self._empty_response(price_m2_pred)
+            return self._empty_response()
 
-        filtered_analogs = [a for a, keep in zip(analogs, keep_mask) if keep]
+        filtered_analogs = [
+            a for a, keep in zip(analogs, keep_mask) if keep
+        ]  # noqa: B905
         pairwise_filtered = pairwise.filter(pl.Series(keep_mask))
 
         # 3. Ранжирование по близости отношения цен к 1.0
@@ -87,13 +89,12 @@ class LandValuationPipeline:
         top_indices = np.argsort(ratio_distance)[: self.top_n_final]
         top_analogs = [filtered_analogs[i] for i in top_indices]
 
-        # 4. Online features
+        # 4. Online features (для MainPriceModel)
         features = compute_online_features(
             request=request,
             top_analogs=top_analogs,
             cities_reference=self.cities_reference,
             locality_reference=self.locality_reference,
-            price_m2_pred=price_m2_pred,
         )
 
         # 5. Основной прогноз
@@ -103,8 +104,11 @@ class LandValuationPipeline:
         kriging_correction = self.kriging_corrector.correct(request.lat, request.lon)
         final_price_m2 = base_price_m2 + kriging_correction
 
-        # 7. Confidence
-        confidence = float(self.confidence_model.predict(features)[0])
+        # 7. Confidence - добавляем price_m2_pred как фичу
+        features_with_pred = features.with_columns(
+            pl.lit(base_price_m2).alias("price_m2_pred")
+        )
+        confidence = float(self.confidence_model.predict(features_with_pred)[0])
 
         return ValuationResponse(
             price_m2=final_price_m2,
@@ -116,12 +120,12 @@ class LandValuationPipeline:
         )
 
     @staticmethod
-    def _empty_response(price_m2_pred: float) -> ValuationResponse:
+    def _empty_response() -> ValuationResponse:
         return ValuationResponse(
             price_m2=0.0,
             total_price=0.0,
             confidence=0.0,
-            base_price_m2=price_m2_pred,
+            base_price_m2=0.0,
             kriging_correction=0.0,
             used_analogs=[],
-        )
+        )  # noqa: W292

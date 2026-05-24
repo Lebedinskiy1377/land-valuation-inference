@@ -30,18 +30,20 @@ def compute_online_features(
     top_analogs: list[DBAnalog],
     cities_reference: pl.DataFrame,
     locality_reference: pl.DataFrame,
-    price_m2_pred: float,
 ) -> pl.DataFrame:
-    """Строит DataFrame признаков для MainPriceModel и ConfidenceModel.
+    """Строит DataFrame признаков для MainPriceModel.
+
+    Признак price_m2_pred (предикт MainPriceModel) добавляется уже
+    в пайплайне, перед вызовом ConfidenceModel, и здесь не считается.
 
     Args:
         request: запрос на оценку.
-        top_analogs: топ-N финальных аналогов после фильтрации и ранжирования.
+        top_analogs: топ-N финальных аналогов после фильтрации и
+            ранжирования.
         cities_reference: DataFrame со столбцами
             (name, lat, lon, size_category), где size_category в
             {"huge", "big", "middle", "small"}.
         locality_reference: DataFrame со столбцами (locality_guid, lon).
-        price_m2_pred: внешний предикт (фича из соседней модели).
 
     Returns:
         Polars DataFrame с одной строкой и колонками, перечисленными
@@ -109,6 +111,5 @@ def compute_online_features(
             "median_analogs_deal": [_safe_numeric_agg(deals_prices, "median")],
             "mean_analogs_offer": [_safe_numeric_agg(offers_prices, "mean")],
             "median_analogs_offer": [_safe_numeric_agg(offers_prices, "median")],
-            "price_m2_pred": [price_m2_pred],
         }
     )
