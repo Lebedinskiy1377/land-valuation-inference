@@ -15,8 +15,8 @@ from scipy.interpolate import RegularGridInterpolator
 class BoostingModel(ABC):
     """Базовый класс для LightGBM-моделей в пайплайне.
 
-    Загружает обученный booster из файла (.txt — нативный формат LightGBM,
-    или .pkl — сериализованный через pickle).
+    Загружает обученный booster из файла (.txt - нативный формат LightGBM,
+    или .pkl - сериализованный через pickle).
     """
 
     def __init__(self, model_path: str | Path) -> None:

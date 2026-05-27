@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 authors = [
     {name = "Dmitriy Lebedinskiy"}
 ]
-license = {text = "MIT"}
+license = "MIT"
 dependencies = [
     "polars>=1.0",
     "pydantic>=2.0",
@@ -26,8 +26,11 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["inference*"]
 
 [tool.ruff]
 line-length = 100
