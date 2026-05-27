@@ -50,12 +50,12 @@ def compute_online_features(
         в порядке feature importance основной модели.
     """
     analogs_df = pl.DataFrame(
-        {
-            "is_offer": [a.is_offer for a in top_analogs],
-            "price_m2": [a.price_m2 for a in top_analogs],
-            "lat": [a.lat for a in top_analogs],
-            "lon": [a.lon for a in top_analogs],
-        }
+        [
+            pl.Series("is_offer", [a.is_offer for a in top_analogs], dtype=pl.Boolean),
+            pl.Series("price_m2", [a.price_m2 for a in top_analogs], dtype=pl.Float64),
+            pl.Series("lat", [a.lat for a in top_analogs], dtype=pl.Float64),
+            pl.Series("lon", [a.lon for a in top_analogs], dtype=pl.Float64),
+        ]
     )
 
     if analogs_df.height > 0:

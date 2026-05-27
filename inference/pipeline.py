@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 import polars as pl
@@ -17,6 +18,20 @@ from .models import (
 from .online_features import compute_online_features
 from .pairwise_features import build_pairwise_features
 from .schemas import DBAnalog, LandRequest, ValuationResponse
+
+
+class FeatureModel(Protocol):
+    """Минимальный интерфейс табличной модели для inference."""
+
+    def predict(self, features: pl.DataFrame) -> np.ndarray:
+        """Возвращает предсказания для батча признаков."""
+
+
+class SpatialCorrector(Protocol):
+    """Минимальный интерфейс пространственной поправки."""
+
+    def correct(self, lat: float, lon: float) -> float:
+        """Возвращает поправку к цене за м²."""
 
 
 class LandValuationPipeline:
@@ -49,11 +64,68 @@ class LandValuationPipeline:
         filter_threshold: float = 0.5,
         top_n_final: int = 5,
     ) -> None:
-        self.analog_filter_model = AnalogFilterModel(analog_filter_path)
-        self.analog_correction_model = AnalogCorrectionModel(analog_correction_path)
-        self.main_price_model = MainPriceModel(main_price_path)
-        self.confidence_model = ConfidenceModel(confidence_path)
-        self.kriging_corrector = KrigingCorrector(kriging_corrector_path)
+        self._configure(
+            analog_filter_model=AnalogFilterModel(analog_filter_path),
+            analog_correction_model=AnalogCorrectionModel(analog_correction_path),
+            main_price_model=MainPriceModel(main_price_path),
+            confidence_model=ConfidenceModel(confidence_path),
+            kriging_corrector=KrigingCorrector(kriging_corrector_path),
+            cities_reference=cities_reference,
+            locality_reference=locality_reference,
+            filter_threshold=filter_threshold,
+            top_n_final=top_n_final,
+        )
+
+    @classmethod
+    def from_components(
+        cls,
+        analog_filter_model: FeatureModel,
+        analog_correction_model: FeatureModel,
+        main_price_model: FeatureModel,
+        confidence_model: FeatureModel,
+        kriging_corrector: SpatialCorrector,
+        cities_reference: pl.DataFrame,
+        locality_reference: pl.DataFrame,
+        filter_threshold: float = 0.5,
+        top_n_final: int = 5,
+    ) -> LandValuationPipeline:
+        """Создаёт пайплайн из уже загруженных компонентов.
+
+        Production-код обычно использует пути к LightGBM/kriging артефактам.
+        Этот конструктор нужен для тестов, smoke-demo и интеграций, где модели
+        создаются внешним контейнером зависимостей.
+        """
+        pipeline = cls.__new__(cls)
+        pipeline._configure(
+            analog_filter_model=analog_filter_model,
+            analog_correction_model=analog_correction_model,
+            main_price_model=main_price_model,
+            confidence_model=confidence_model,
+            kriging_corrector=kriging_corrector,
+            cities_reference=cities_reference,
+            locality_reference=locality_reference,
+            filter_threshold=filter_threshold,
+            top_n_final=top_n_final,
+        )
+        return pipeline
+
+    def _configure(
+        self,
+        analog_filter_model: FeatureModel,
+        analog_correction_model: FeatureModel,
+        main_price_model: FeatureModel,
+        confidence_model: FeatureModel,
+        kriging_corrector: SpatialCorrector,
+        cities_reference: pl.DataFrame,
+        locality_reference: pl.DataFrame,
+        filter_threshold: float,
+        top_n_final: int,
+    ) -> None:
+        self.analog_filter_model = analog_filter_model
+        self.analog_correction_model = analog_correction_model
+        self.main_price_model = main_price_model
+        self.confidence_model = confidence_model
+        self.kriging_corrector = kriging_corrector
 
         self.cities_reference = cities_reference
         self.locality_reference = locality_reference
@@ -77,9 +149,7 @@ class LandValuationPipeline:
         if not keep_mask.any():
             return self._empty_response()
 
-        filtered_analogs = [
-            a for a, keep in zip(analogs, keep_mask) if keep
-        ]  # noqa: B905
+        filtered_analogs = [a for a, keep in zip(analogs, keep_mask, strict=False) if keep]
         pairwise_filtered = pairwise.filter(pl.Series(keep_mask))
 
         # 3. Ранжирование по близости отношения цен к 1.0
@@ -128,4 +198,4 @@ class LandValuationPipeline:
             base_price_m2=0.0,
             kriging_correction=0.0,
             used_analogs=[],
-        )  # noqa: W292
+        )

@@ -1,3 +1,8 @@
+from .analog_retrieval import (
+    AnalogCandidateRetriever,
+    AnalogRetrievalConfig,
+    retrieve_analogs,
+)
 from .models import (
     AnalogCorrectionModel,
     AnalogFilterModel,
@@ -9,8 +14,10 @@ from .pipeline import LandValuationPipeline
 from .schemas import DBAnalog, LandRequest, ValuationResponse
 
 __all__ = [
+    "AnalogCandidateRetriever",
     "AnalogCorrectionModel",
     "AnalogFilterModel",
+    "AnalogRetrievalConfig",
     "ConfidenceModel",
     "DBAnalog",
     "KrigingCorrector",
@@ -18,4 +25,5 @@ __all__ = [
     "LandValuationPipeline",
     "MainPriceModel",
     "ValuationResponse",
+    "retrieve_analogs",
 ]

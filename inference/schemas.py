@@ -43,7 +43,8 @@ class ValuationResponse(BaseModel):
     kriging_correction: float
     used_analogs: list[DBAnalog]
 
-    @field_validator("confidence")
+    @field_validator("confidence", mode="before")
     @classmethod
     def _clip_confidence(cls, v: float) -> float:
-        return max(0.0, min(1.0, v))
+        value = float(v)
+        return max(0.0, min(1.0, value))

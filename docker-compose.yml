@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: land_valuation
+      POSTGRES_USER: land_user
+      POSTGRES_PASSWORD: land_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U land_user -d land_valuation"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  db-check:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: land_password
+    command:
+      - psql
+      - -h
+      - postgres
+      - -U
+      - land_user
+      - -d
+      - land_valuation
+      - -c
+      - select count(*) as analogs_count from hot_storage_analogs;
+
+  demo:
+    build: .
+    command: python -m examples.smoke_demo
+
+  test:
+    build: .
+    command: python -m pytest
+
+  lint:
+    build: .
+    command: sh -c "python -m ruff check . && python -m mypy inference"
+
+volumes:
+  postgres-data:
