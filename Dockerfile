@@ -13,6 +13,8 @@ RUN apt-get update \
 COPY pyproject.toml README.md ./
 COPY inference ./inference
 COPY examples ./examples
+COPY benchmarks ./benchmarks
+COPY api ./api
 COPY tests ./tests
 COPY docs ./docs
 

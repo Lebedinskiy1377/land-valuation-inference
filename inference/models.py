@@ -5,11 +5,19 @@ from __future__ import annotations
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import ClassVar
 
 import lightgbm as lgb
 import numpy as np
 import polars as pl
 from scipy.interpolate import RegularGridInterpolator
+
+from .feature_contracts import (
+    CONFIDENCE_FEATURES,
+    MAIN_PRICE_FEATURES,
+    PAIRWISE_FEATURES,
+    FeatureContract,
+)
 
 
 class BoostingModel(ABC):
@@ -18,6 +26,8 @@ class BoostingModel(ABC):
     Загружает обученный booster из файла (.txt - нативный формат LightGBM,
     или .pkl - сериализованный через pickle).
     """
+
+    feature_contract: ClassVar[FeatureContract | None] = None
 
     def __init__(self, model_path: str | Path) -> None:
         model_path = Path(model_path)
@@ -40,6 +50,15 @@ class BoostingModel(ABC):
         """Возвращает массив предсказаний для батча признаков."""
         pass
 
+    def _prepare_features(self, features: pl.DataFrame) -> pl.DataFrame:
+        if self.feature_contract is None:
+            return features
+        return self.feature_contract.validate(features)
+
+    def _predict_booster(self, features: pl.DataFrame) -> np.ndarray:
+        prepared_features = self._prepare_features(features)
+        return np.asarray(self._booster.predict(prepared_features.to_numpy()))
+
 
 class AnalogFilterModel(BoostingModel):
     """Бинарный классификатор плохих аналогов.
@@ -49,8 +68,10 @@ class AnalogFilterModel(BoostingModel):
     В пайплайне отсекаем кандидатов с proba >= filter_threshold.
     """
 
+    feature_contract = PAIRWISE_FEATURES
+
     def predict(self, features: pl.DataFrame) -> np.ndarray:
-        return np.asarray(self._booster.predict(features.to_numpy()))
+        return self._predict_booster(features)
 
 
 class AnalogCorrectionModel(BoostingModel):
@@ -61,22 +82,28 @@ class AnalogCorrectionModel(BoostingModel):
     эквивалентные по цене.
     """
 
+    feature_contract = PAIRWISE_FEATURES
+
     def predict(self, features: pl.DataFrame) -> np.ndarray:
-        return np.asarray(self._booster.predict(features.to_numpy()))
+        return self._predict_booster(features)
 
 
 class MainPriceModel(BoostingModel):
     """Основной регрессор цены за квадратный метр (с monotonic constraints)."""
 
+    feature_contract = MAIN_PRICE_FEATURES
+
     def predict(self, features: pl.DataFrame) -> np.ndarray:
-        return np.asarray(self._booster.predict(features.to_numpy()))
+        return self._predict_booster(features)
 
 
 class ConfidenceModel(BoostingModel):
     """Регрессор уверенности модели в прогнозе. Возвращает скор в [0, 1]."""
 
+    feature_contract = CONFIDENCE_FEATURES
+
     def predict(self, features: pl.DataFrame) -> np.ndarray:
-        return np.asarray(self._booster.predict(features.to_numpy()))
+        return self._predict_booster(features)
 
 
 class KrigingCorrector:

@@ -32,3 +32,6 @@ jobs:
 
       - name: Smoke demo
         run: python -m examples.smoke_demo
+
+      - name: Benchmark smoke
+        run: python -m benchmarks.latency --iterations 10

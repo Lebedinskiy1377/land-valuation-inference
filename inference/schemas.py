@@ -1,8 +1,13 @@
 """Pydantic-схемы для inference."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+ValuationDecision = Literal["auto_approve", "manual_review", "no_valuation"]
 
 
 class LandRequest(BaseModel):
@@ -33,15 +38,30 @@ class DBAnalog(BaseModel):
     region: str
 
 
+class LatencyTrace(BaseModel):
+    """Latency breakdown for one inference request in milliseconds."""
+
+    pairwise_ms: float = 0.0
+    filter_ms: float = 0.0
+    ranking_ms: float = 0.0
+    online_features_ms: float = 0.0
+    main_model_ms: float = 0.0
+    kriging_ms: float = 0.0
+    confidence_ms: float = 0.0
+    total_ms: float = 0.0
+
+
 class ValuationResponse(BaseModel):
     """Результат оценки."""
 
     price_m2: float
     total_price: float
     confidence: float = Field(..., ge=0.0, le=1.0)
+    decision: ValuationDecision = "manual_review"
     base_price_m2: float
     kriging_correction: float
     used_analogs: list[DBAnalog]
+    latency: LatencyTrace | None = None
 
     @field_validator("confidence", mode="before")
     @classmethod

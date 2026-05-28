@@ -96,8 +96,11 @@ def test_pipeline_filters_ranks_and_returns_final_response() -> None:
     assert response.price_m2 == pytest.approx(1_025.0)
     assert response.total_price == pytest.approx(1_025_000.0)
     assert response.confidence == pytest.approx(1.0)
+    assert response.decision == "auto_approve"
     assert response.base_price_m2 == pytest.approx(1_000.0)
     assert response.kriging_correction == pytest.approx(25.0)
+    assert response.latency is not None
+    assert response.latency.total_ms > 0.0
     assert [analog.deal_id for analog in response.used_analogs] == ["kept-top-rank"]
 
 
@@ -116,14 +119,12 @@ def test_pipeline_returns_empty_response_when_no_analogs_survive_filter() -> Non
 
     response = pipeline.predict(_request(), [_analog("bad", 2_000.0)])
 
-    assert response == ValuationResponse(
-        price_m2=0.0,
-        total_price=0.0,
-        confidence=0.0,
-        base_price_m2=0.0,
-        kriging_correction=0.0,
-        used_analogs=[],
-    )
+    assert response.price_m2 == pytest.approx(0.0)
+    assert response.total_price == pytest.approx(0.0)
+    assert response.confidence == pytest.approx(0.0)
+    assert response.decision == "no_valuation"
+    assert response.used_analogs == []
+    assert response.latency is not None
 
 
 def test_response_clips_confidence_before_range_validation() -> None:
@@ -137,3 +138,22 @@ def test_response_clips_confidence_before_range_validation() -> None:
     )
 
     assert response.confidence == pytest.approx(0.0)
+
+
+def test_pipeline_returns_manual_review_for_low_confidence_prediction() -> None:
+    cities_reference, locality_reference = _references()
+    pipeline = LandValuationPipeline.from_components(
+        analog_filter_model=ArrayModel([0.1]),
+        analog_correction_model=ArrayModel([1.0]),
+        main_price_model=ConstantModel(1_000.0),
+        confidence_model=ConstantModel(0.3),
+        kriging_corrector=ConstantCorrector(0.0),
+        cities_reference=cities_reference,
+        locality_reference=locality_reference,
+        filter_threshold=0.5,
+        auto_approve_threshold=0.75,
+    )
+
+    response = pipeline.predict(_request(), [_analog("ok", 2_000.0)])
+
+    assert response.decision == "manual_review"

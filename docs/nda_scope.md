@@ -8,6 +8,7 @@
 ## Что включено
 
 - Pydantic-схемы входного запроса, аналога и ответа модели.
+- Feature contracts для валидации колонок на входе моделей.
 - Обёртки над LightGBM-бустингами и precomputed kriging grid.
 - Публичный макет retrieval-слоя для аналогов: bbox-prefilter и BallTree
   haversine radius search.
@@ -17,6 +18,7 @@
 - Smoke-demo с toy-моделями, которое можно запустить без приватных артефактов.
 - Unit-тесты ключевых участков: гео-расчёты, признаки, фильтрация,
   ранжирование, confidence clipping.
+- Latency trace, benchmark и минимальный optional FastAPI wrapper.
 - Dockerfile, Docker Compose, Makefile и CI-конфигурация для воспроизводимой
   проверки макета.
 - Локальная Postgres-схема с синтетической seed-таблицей аналогов для проверки

@@ -198,6 +198,10 @@ land-valuation-inference/
 │   └── pipeline.py             # LandValuationPipeline - оркестрация
 ├── examples/
 │   └── smoke_demo.py           # Запуск пайплайна на toy-моделях без NDA-артефактов
+├── benchmarks/
+│   └── latency.py              # Локальный latency benchmark demo-пайплайна
+├── api/
+│   └── app.py                  # Optional FastAPI wrapper для smoke inference
 ├── tests/                      # Unit-тесты публичного макета
 ├── .github/workflows/
 │   └── ci.yml                  # CI: lint, mypy, pytest, smoke demo
@@ -238,6 +242,7 @@ LightGBM-компоненты. Это нужно только для прове�
 ```bash
 python -m examples.smoke_demo
 pytest
+python -m benchmarks.latency --iterations 100
 ```
 
 Для полного локального набора проверок:
@@ -278,6 +283,13 @@ python -m ruff check .
 python -m mypy inference
 python -m pytest
 python -m examples.smoke_demo
+```
+
+Optional API wrapper:
+
+```bash
+pip install -e ".[api]"
+uvicorn api.app:app --reload
 ```
 
 ## Использование
@@ -322,6 +334,7 @@ result = pipeline.predict(request, analogs)
 print(f"Price per m²: {result.price_m2:,.0f}")
 print(f"Total: {result.total_price:,.0f}")
 print(f"Confidence: {result.confidence:.2%}")
+print(f"Decision: {result.decision}")
 ```
 
 Метод `pipeline.predict()` без артефактов работать не будет -
